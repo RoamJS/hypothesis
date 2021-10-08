@@ -130,10 +130,11 @@ runExtension(ID, () => {
 
   registerSmartBlocksCommand({
     text: "HYPOTHESISINSERTANNOTATIONS",
-    handler: (context: { targetUid: string }) => () => {
+    handler: (context: { targetUid: string }) => (limitArg = '20') => {
+      const limit = Number(limitArg) || 20;
       const text = getTextByBlockUid(context.targetUid);
       const articleUrl = text.match(urlRegex({ strict: true }))?.[0];
-      const searchUrl = `search?user=${
+      const searchUrl = `search?limit=${limit}&user=${
         userProfile.userid
       }&order=asc&uri=${encodeURIComponent(articleUrl)}`;
       return insertAnnotions(searchUrl).then((children) => [
@@ -144,10 +145,11 @@ runExtension(ID, () => {
 
   registerSmartBlocksCommand({
     text: "HYPOTHESISPUBLICANNOTATIONS",
-    handler: (context: { targetUid: string }) => () => {
+    handler: (context: { targetUid: string }) => (limitArg = '20') => {
+      const limit = Number(limitArg) || 20;
       const text = getTextByBlockUid(context.targetUid);
       const articleUrl = text.match(urlRegex({ strict: true }))?.[0];
-      const searchUrl = `search?order=asc&uri=${encodeURIComponent(
+      const searchUrl = `search?limit=${limit}&order=asc&uri=${encodeURIComponent(
         articleUrl
       )}`;
       return searchAnnotations(searchUrl).then((annotations) => {
