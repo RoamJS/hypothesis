@@ -45,9 +45,7 @@ runExtension(ID, () => {
       ],
     },
   });
-  const tree = getBasicTreeByParentUid(pageUid);
-  const userToken = getSettingValueFromTree({ tree, key: "token" });
-  const userProfile = { userid: "" };
+
   /*
   const sbButton =
     "{{=:|#hypothesis}}" +
@@ -56,9 +54,18 @@ runExtension(ID, () => {
   */
 
   const apiUrl = "https://api.hypothes.is/api";
-  const opts = {
-    headers: { Authorization: `Bearer ${userToken}` },
+  const getOpts = () => {
+    const tree = getBasicTreeByParentUid(pageUid);
+    const userToken = getSettingValueFromTree({ tree, key: "token" });
+    return {
+      headers: { Authorization: `Bearer ${userToken}` },
+    };
   };
+  const getUser = () =>
+    axios
+      .get(`${apiUrl}/profile`, getOpts())
+      .then((r) => r.data.userid as string);
+
   const searchAnnotations = (searchUrl: string) =>
     axios
       .get(`${apiUrl}/${searchUrl}`, {
@@ -70,9 +77,6 @@ runExtension(ID, () => {
         },
       })
       .then((r) => apiAnnotationSimplify(r.data));
-  axios
-    .get(`${apiUrl}/profile`, opts)
-    .then((r) => (userProfile.userid = r.data.userid));
 
   const formatHighlightBasedOnTemplate = (
     template: string,
@@ -130,46 +134,52 @@ runExtension(ID, () => {
 
   registerSmartBlocksCommand({
     text: "HYPOTHESISINSERTANNOTATIONS",
-    handler: (context: { targetUid: string }) => (limitArg = '20') => {
-      const limit = Number(limitArg) || 20;
-      const text = getTextByBlockUid(context.targetUid);
-      const articleUrl = text.match(urlRegex({ strict: true }))?.[0];
-      const searchUrl = `search?limit=${limit}&user=${
-        userProfile.userid
-      }&order=asc&uri=${encodeURIComponent(articleUrl)}`;
-      return insertAnnotions(searchUrl).then((children) => [
-        { text: "", children },
-      ]);
-    },
+    handler:
+      (context: { targetUid: string }) =>
+      (limitArg = "20") => {
+        const limit = Number(limitArg) || 20;
+        const text = getTextByBlockUid(context.targetUid);
+        const articleUrl = text.match(urlRegex({ strict: true }))?.[0];
+        return getUser().then((userId) => {
+          const searchUrl = `search?limit=${limit}&user=${userId}&order=asc&uri=${encodeURIComponent(
+            articleUrl
+          )}`;
+          return insertAnnotions(searchUrl).then((children) => [
+            { text: "", children },
+          ]);
+        });
+      },
   });
 
   registerSmartBlocksCommand({
     text: "HYPOTHESISPUBLICANNOTATIONS",
-    handler: (context: { targetUid: string }) => (limitArg = '20') => {
-      const limit = Number(limitArg) || 20;
-      const text = getTextByBlockUid(context.targetUid);
-      const articleUrl = text.match(urlRegex({ strict: true }))?.[0];
-      const searchUrl = `search?limit=${limit}&order=asc&uri=${encodeURIComponent(
-        articleUrl
-      )}`;
-      return searchAnnotations(searchUrl).then((annotations) => {
-        var users = [...new Set(annotations.map((e) => e.user))];
-        return [
-          {
-            text: `[${annotations[0].title}](https://via.hypothes.is/${annotations[0].uri})`,
-            children: users.map((user) => {
-              const f = annotations.filter((e) => e.user == user);
-              const id = f[0].user
-                .replace("acct:", "")
-                .replace("@hypothes.is", "");
-              return {
-                text: `[${id}](https://hypothes.is/users/${id})`,
-              };
-            }),
-          },
-        ];
-      });
-    },
+    handler:
+      (context: { targetUid: string }) =>
+      (limitArg = "20") => {
+        const limit = Number(limitArg) || 20;
+        const text = getTextByBlockUid(context.targetUid);
+        const articleUrl = text.match(urlRegex({ strict: true }))?.[0];
+        const searchUrl = `search?limit=${limit}&order=asc&uri=${encodeURIComponent(
+          articleUrl
+        )}`;
+        return searchAnnotations(searchUrl).then((annotations) => {
+          var users = [...new Set(annotations.map((e) => e.user))];
+          return [
+            {
+              text: `[${annotations[0].title}](https://via.hypothes.is/${annotations[0].uri})`,
+              children: users.map((user) => {
+                const f = annotations.filter((e) => e.user == user);
+                const id = f[0].user
+                  .replace("acct:", "")
+                  .replace("@hypothes.is", "");
+                return {
+                  text: `[${id}](https://hypothes.is/users/${id})`,
+                };
+              }),
+            },
+          ];
+        });
+      },
   });
 
   const apiAnnotationSimplify = async (results: {
@@ -215,16 +225,19 @@ runExtension(ID, () => {
     fromDate: string,
     tags: string
   ) => {
-    const searchUrl = `search?tags=${encodeURIComponent(tags)}&user=${
-      userProfile.userid
-    }&sort=updated&order=asc&search_after=${fromDate}`;
-    return searchAnnotations(searchUrl);
+    return getUser().then((userId) => {
+      const searchUrl = `search?tags=${encodeURIComponent(
+        tags
+      )}&user=${userId}&sort=updated&order=asc&search_after=${fromDate}`;
+      return searchAnnotations(searchUrl);
+    });
   };
 
-  const getAnnotationsSinceDate = async (fromDate: string) => {
-    const searchUrl = `search?user=${userProfile.userid}&sort=updated&order=asc&search_after=${fromDate}`;
-    return searchAnnotations(searchUrl);
-  };
+  const getAnnotationsSinceDate = async (fromDate: string) =>
+    getUser().then((userId) => {
+      const searchUrl = `search?user=${userId}&sort=updated&order=asc&search_after=${fromDate}`;
+      return searchAnnotations(searchUrl);
+    });
 
   const openArticleInHypothesis = async (blockUid: string) => {
     const text = getTextByBlockUid(blockUid);
