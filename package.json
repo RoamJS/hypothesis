@@ -20,7 +20,6 @@
     "@blueprintjs/select": "^3.18.4",
     "react": "^17.0.2",
     "react-dom": "^17.0.2",
-    "roam-client": "^1.90.0",
     "roamjs-components": "^0.57.7",
     "url-regex-safe": "^2.0.2"
   }

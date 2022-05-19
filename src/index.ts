@@ -1,21 +1,17 @@
-import {
-  toConfig,
-  runExtension,
-  getBasicTreeByParentUid,
-  registerSmartBlocksCommand,
-  getTextByBlockUid,
-} from "roam-client";
-import {
-  createConfigObserver,
-  getSettingValueFromTree,
-} from "roamjs-components";
+import toConfigPageName from "roamjs-components/util/toConfigPageName";
+import runExtension from "roamjs-components/util/runExtension";
+import getBasicTreeByParentUid from "roamjs-components/queries/getBasicTreeByParentUid";
+import registerSmartBlocksCommand from "roamjs-components/util/registerSmartBlocksCommand";
+import getTextByBlockUid from "roamjs-components/queries/getTextByBlockUid";
+import { createConfigObserver } from "roamjs-components/components/ConfigPage";
+import getSettingValueFromTree from "roamjs-components/util/getSettingValueFromTree";
 import axios from "axios";
 import urlRegex from "url-regex-safe";
 
 const ID = "hypothesis";
-const CONFIG = toConfig(ID);
-runExtension(ID, () => {
-  const { pageUid } = createConfigObserver({
+const CONFIG = toConfigPageName(ID);
+runExtension(ID, async () => {
+  const { pageUid } = await createConfigObserver({
     title: CONFIG,
     config: {
       tabs: [
