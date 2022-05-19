@@ -1,5 +1,6 @@
 name: Publish Extension
 on:
+  workflow_dispatch:
   push:
     branches: main
     paths:
@@ -23,3 +24,4 @@ jobs:
           source: build
           path: hypothesis
           release_token: ${{ secrets.ROAMJS_RELEASE_TOKEN }}
+          email: support@roamjs.com
