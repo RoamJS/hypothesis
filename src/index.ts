@@ -274,7 +274,7 @@ export default runExtension({
     };
 
     window.roamAlphaAPI.ui.commandPalette.addCommand({
-      label: "Open Site from Hypothesis",
+      label: "Open Site in Hypothesis",
       callback: () => {
         openArticleInHypothesis(
           window.roamAlphaAPI.ui.getFocusedBlock()["block-uid"]
@@ -292,7 +292,7 @@ export default runExtension({
     return () => {
       unregesterOpenSite();
       window.roamAlphaAPI.ui.commandPalette.removeCommand({
-        label: "Open Site from Hypothesis",
+        label: "Open Site in Hypothesis",
       });
       unregisterAnnotations();
       window.roamAlphaAPI.ui.commandPalette.removeCommand({

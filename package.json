@@ -1,7 +1,7 @@
 {
   "name": "hypothesis",
   "version": "1.0.0",
-  "description": "Description for hypothesis.",
+  "description": "Integrate your Hypothesis account with Roam!",
   "main": "./build/main.js",
   "scripts": {
     "prebuild:roam": "npm install",
