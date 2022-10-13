@@ -24,4 +24,4 @@ jobs:
       - name: build
         run: npx roamjs-scripts build --depot
       - name: RoamJS Publish
-        uses: npx roamjs-scripts publish --depot
+        run: npx roamjs-scripts publish --depot
