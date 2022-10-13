@@ -4,23 +4,15 @@
   "description": "Description for hypothesis.",
   "main": "./build/main.js",
   "scripts": {
-    "build": "roamjs-scripts build",
-    "dev": "roamjs-scripts dev"
+    "prebuild:roam": "npm install",
+    "build:roam": "roamjs-scripts build --depot",
+    "start": "roamjs-scripts dev --depot"
   },
   "license": "MIT",
   "devDependencies": {
-    "@types/react": "^17.0.24",
-    "@types/react-dom": "^17.0.9",
-    "@types/url-regex-safe": "^1.0.0",
-    "roamjs-scripts": "^0.12.3",
-    "typescript": "^4.4.3"
+    "roamjs-scripts": "^0.24.0"
   },
   "dependencies": {
-    "@blueprintjs/core": "^3.50.2",
-    "@blueprintjs/select": "^3.18.4",
-    "react": "^17.0.2",
-    "react-dom": "^17.0.2",
-    "roamjs-components": "^0.57.7",
-    "url-regex-safe": "^2.0.2"
+    "roamjs-components": "^0.74.11"
   }
 }

@@ -1,141 +1,142 @@
-import toConfigPageName from "roamjs-components/util/toConfigPageName";
 import runExtension from "roamjs-components/util/runExtension";
-import getBasicTreeByParentUid from "roamjs-components/queries/getBasicTreeByParentUid";
 import registerSmartBlocksCommand from "roamjs-components/util/registerSmartBlocksCommand";
 import getTextByBlockUid from "roamjs-components/queries/getTextByBlockUid";
-import { createConfigObserver } from "roamjs-components/components/ConfigPage";
-import getSettingValueFromTree from "roamjs-components/util/getSettingValueFromTree";
-import axios from "axios";
-import urlRegex from "url-regex-safe";
+import apiGet from "roamjs-components/util/apiGet";
 
-const ID = "hypothesis";
-const CONFIG = toConfigPageName(ID);
-runExtension(ID, async () => {
-  const { pageUid } = await createConfigObserver({
-    title: CONFIG,
-    config: {
-      tabs: [
+// https://github.com/spamscanner/url-regex-safe/blob/master/src/index.js
+const protocol = `(?:https?://)`;
+const host = "(?:(?:[a-z\\u00a1-\\uffff0-9][-_]*)*[a-z\\u00a1-\\uffff0-9]+)";
+const domain = "(?:\\.(?:[a-z\\u00a1-\\uffff0-9]-*)*[a-z\\u00a1-\\uffff0-9]+)*";
+const tld = `(?:\\.(?:[a-z\\u00a1-\\uffff]{2,}))`;
+const port = "(?::\\d{2,5})?";
+const path = "(?:[/?#][^\\s\"\\)']*)?";
+const urlRegex = `(?:${protocol}|www\\.)(?:${host}${domain}${tld})${port}${path}`;
+
+export default runExtension({
+  run: async (args) => {
+    args.extensionAPI.settings.panel.create({
+      tabTitle: "Hypothesis",
+      settings: [
         {
-          id: "home",
-          fields: [
-            {
-              title: "token",
-              type: "text",
-              description:
-                "Input your Hypothesis User API Token here, which could be obtained from https://hypothes.is/account/developer",
-            },
-            {
-              title: "highlights",
-              type: "text",
-              description: "The output format to a block from a highlight",
-              defaultValue: "HIGHLIGHT [->](URL)",
-            },
-            {
-              title: "notes",
-              type: "text",
-              description: "The output format to a block from a note",
-              defaultValue: "NOTE",
-            },
-          ],
+          id: "token",
+          action: { type: "input", placeholder: "xxx" },
+          description:
+            "Input your Hypothesis User API Token here, which could be obtained from https://hypothes.is/account/developer",
+          name: "API Token",
+        },
+        {
+          id: "highlights",
+          action: { type: "input", placeholder: "HIGHLIGHT [->](URL)" },
+          description: "The output format to a block from a highlight",
+          name: "Highlights Format",
+        },
+        {
+          id: "notes",
+          action: { type: "input", placeholder: "NOTE" },
+          description: "The output format to a block from a note",
+          name: "Notes Format",
         },
       ],
-    },
-  });
+    });
 
-  /*
-  const sbButton =
-    "{{=:|#hypothesis}}" +
-    "{{📰:42SmartBlock:Hypothes.is - Open site:42RemoveButton=false}}" +
-    "{{📑:42SmartBlock:Hypothes.is - Insert my annotations from site in current block:42RemoveButton=false}}";
-  */
-
-  const apiUrl = "https://api.hypothes.is/api";
-  const getOpts = () => {
-    const tree = getBasicTreeByParentUid(pageUid);
-    const userToken = getSettingValueFromTree({ tree, key: "token" });
-    return {
-      headers: { Authorization: `Bearer ${userToken}` },
+    const domain = "https://api.hypothes.is/api";
+    const getAuth = () => {
+      const userToken = args.extensionAPI.settings.get("token") as string;
+      return `Bearer ${userToken}`;
     };
-  };
-  const getUser = () =>
-    axios
-      .get(`${apiUrl}/profile`, getOpts())
-      .then((r) => r.data.userid as string);
+    const getUser = () =>
+      apiGet<{ userid: string }>({
+        domain,
+        path: `profile`,
+        authorization: getAuth(),
+      }).then((r) => r.userid);
 
-  const searchAnnotations = (searchUrl: string) =>
-    axios
-      .get(`${apiUrl}/${searchUrl}`, {
-        headers: {
-          Authorization: `Bearer ${getSettingValueFromTree({
-            tree: getBasicTreeByParentUid(pageUid),
-            key: "token",
-          })}`,
+    const searchAnnotations = (searchUrl: string) =>
+      apiGet<Parameters<typeof apiAnnotationSimplify>[0]>({
+        domain,
+        path: searchUrl,
+        authorization: getAuth(),
+      }).then((r) => apiAnnotationSimplify(r));
+
+    const formatHighlightBasedOnTemplate = (
+      template: string,
+      highlight: string,
+      url: string
+    ) => {
+      return template
+        .replace("HIGHLIGHT", highlight.trim())
+        .replace("URL", url)
+        .trim();
+    };
+
+    const formatNoteBasedOnTemplate = (
+      template: string,
+      note: string,
+      url: string
+    ) => {
+      return template.replace("NOTE", note.trim()).replace("URL", url).trim();
+    };
+
+    const insertAnnotions = async (searchUrl: string) => {
+      const results = await searchAnnotations(searchUrl);
+      const hTemplate =
+        (args.extensionAPI.settings.get("highlights") as string) ||
+        "HIGHLIGHT [->](URL)";
+      const nTemplate =
+        (args.extensionAPI.settings.get("notes") as string) || "NOTE";
+      return results.map((e, i) => {
+        var output = "";
+        if (e.highlight != "")
+          output += formatHighlightBasedOnTemplate(
+            hTemplate,
+            e.highlight,
+            e.context
+          );
+        output = output.trim();
+        if (e.tags.length > 0)
+          output += e.tags.map((e) => ` #[[${e}]]`).reduce((e, a) => e + a);
+        if (i == results.length - 1) output += "  "; //last block, need spaces
+
+        return {
+          text: output,
+          children: e.text
+            ? [
+                {
+                  text: formatNoteBasedOnTemplate(nTemplate, e.text, e.context),
+                },
+              ]
+            : [],
+        };
+      });
+    };
+
+    const unregisterPrivateAnnotations = registerSmartBlocksCommand({
+      text: "HYPOTHESISINSERTANNOTATIONS",
+      handler:
+        (context: { targetUid: string }) =>
+        (limitArg = "20") => {
+          const limit = Number(limitArg) || 20;
+          const text = getTextByBlockUid(context.targetUid);
+          const articleUrl = text.match(urlRegex)?.[0];
+          return getUser().then((userId) => {
+            const searchUrl = `search?limit=${limit}&user=${userId}&order=asc&uri=${encodeURIComponent(
+              articleUrl
+            )}`;
+            return insertAnnotions(searchUrl).then((children) => [
+              { text: "", children },
+            ]);
+          });
         },
-      })
-      .then((r) => apiAnnotationSimplify(r.data));
-
-  const formatHighlightBasedOnTemplate = (
-    template: string,
-    highlight: string,
-    url: string
-  ) => {
-    return template
-      .replace("HIGHLIGHT", highlight.trim())
-      .replace("URL", url)
-      .trim();
-  };
-
-  const formatNoteBasedOnTemplate = (
-    template: string,
-    note: string,
-    url: string
-  ) => {
-    return template.replace("NOTE", note.trim()).replace("URL", url).trim();
-  };
-
-  const insertAnnotions = async (searchUrl: string) => {
-    const results = await searchAnnotations(searchUrl);
-    const tree = getBasicTreeByParentUid(pageUid);
-    const hTemplate = getSettingValueFromTree({
-      tree,
-      key: "highlights",
-      defaultValue: "HIGHLIGHT [->](URL)",
     });
-    const nTemplate = getSettingValueFromTree({
-      tree,
-      key: "notes",
-      defaultValue: "NOTE",
-    });
-    return results.map((e, i) => {
-      var output = "";
-      if (e.highlight != "")
-        output += formatHighlightBasedOnTemplate(
-          hTemplate,
-          e.highlight,
-          e.context
+
+    window.roamAlphaAPI.ui.commandPalette.addCommand({
+      label: "Import Private Hypothesis Annotations",
+      callback: () => {
+        const limit = 20; //Number(limitArg) || 20;
+        const text = getTextByBlockUid(
+          window.roamAlphaAPI.ui.getFocusedBlock()?.["block-uid"]
         );
-      output = output.trim();
-      if (e.tags.length > 0)
-        output += e.tags.map((e) => ` #[[${e}]]`).reduce((e, a) => e + a);
-      if (i == results.length - 1) output += "  "; //last block, need spaces
-
-      return {
-        text: output,
-        children: e.text
-          ? [{ text: formatNoteBasedOnTemplate(nTemplate, e.text, e.context) }]
-          : [],
-      };
-    });
-  };
-
-  registerSmartBlocksCommand({
-    text: "HYPOTHESISINSERTANNOTATIONS",
-    handler:
-      (context: { targetUid: string }) =>
-      (limitArg = "20") => {
-        const limit = Number(limitArg) || 20;
-        const text = getTextByBlockUid(context.targetUid);
-        const articleUrl = text.match(urlRegex({ strict: true }))?.[0];
+        const articleUrl = text.match(urlRegex)?.[0];
         return getUser().then((userId) => {
           const searchUrl = `search?limit=${limit}&user=${userId}&order=asc&uri=${encodeURIComponent(
             articleUrl
@@ -145,16 +146,47 @@ runExtension(ID, async () => {
           ]);
         });
       },
-  });
+    });
 
-  registerSmartBlocksCommand({
-    text: "HYPOTHESISPUBLICANNOTATIONS",
-    handler:
-      (context: { targetUid: string }) =>
-      (limitArg = "20") => {
-        const limit = Number(limitArg) || 20;
-        const text = getTextByBlockUid(context.targetUid);
-        const articleUrl = text.match(urlRegex({ strict: true }))?.[0];
+    const unregisterAnnotations = registerSmartBlocksCommand({
+      text: "HYPOTHESISPUBLICANNOTATIONS",
+      handler:
+        (context: { targetUid: string }) =>
+        (limitArg = "20") => {
+          const limit = Number(limitArg) || 20;
+          const text = getTextByBlockUid(context.targetUid);
+          const articleUrl = text.match(urlRegex)?.[0];
+          const searchUrl = `search?limit=${limit}&order=asc&uri=${encodeURIComponent(
+            articleUrl
+          )}`;
+          return searchAnnotations(searchUrl).then((annotations) => {
+            var users = [...new Set(annotations.map((e) => e.user))];
+            return [
+              {
+                text: `[${annotations[0].title}](https://via.hypothes.is/${annotations[0].uri})`,
+                children: users.map((user) => {
+                  const f = annotations.filter((e) => e.user == user);
+                  const id = f[0].user
+                    .replace("acct:", "")
+                    .replace("@hypothes.is", "");
+                  return {
+                    text: `[${id}](https://hypothes.is/users/${id})`,
+                  };
+                }),
+              },
+            ];
+          });
+        },
+    });
+
+    window.roamAlphaAPI.ui.commandPalette.addCommand({
+      label: "Import Public Hypothesis Annotations",
+      callback: () => {
+        const blockUid =
+          window.roamAlphaAPI.ui.getFocusedBlock()?.["block-uid"];
+        const limit = 20; // Number(limitArg) || 20;
+        const text = getTextByBlockUid(blockUid);
+        const articleUrl = text.match(urlRegex)?.[0];
         const searchUrl = `search?limit=${limit}&order=asc&uri=${encodeURIComponent(
           articleUrl
         )}`;
@@ -176,76 +208,100 @@ runExtension(ID, async () => {
           ];
         });
       },
-  });
-
-  const apiAnnotationSimplify = async (results: {
-    rows: {
-      document: { title: string[] };
-      uri: string;
-      links: { incontext: string };
-      text: string;
-      tags: string[];
-      user: string;
-      group: string;
-      created: number;
-      updated: number;
-      target: { selector: { type: string; exact: string }[] }[];
-    }[];
-  }) => {
-    return results.rows.map((e) => {
-      var r = {
-        title: e.document.title[0],
-        uri: e.uri,
-        context: e.links.incontext,
-        text: e.text,
-        highlight: "",
-        tags: e.tags,
-        user: e.user,
-        group: e.group,
-        created: e.created,
-        updated: e.updated,
-      };
-      try {
-        if (e.target[0].selector) {
-          var txt = e.target[0].selector.filter(
-            (e) => e.type == "TextQuoteSelector"
-          );
-          if (txt) r.highlight = txt[0].exact;
-        }
-      } catch (e) {}
-      return r;
-    });
-  };
-
-  const getAnnotationsSinceDateWithTags = async (
-    fromDate: string,
-    tags: string
-  ) => {
-    return getUser().then((userId) => {
-      const searchUrl = `search?tags=${encodeURIComponent(
-        tags
-      )}&user=${userId}&sort=updated&order=asc&search_after=${fromDate}`;
-      return searchAnnotations(searchUrl);
-    });
-  };
-
-  const getAnnotationsSinceDate = async (fromDate: string) =>
-    getUser().then((userId) => {
-      const searchUrl = `search?user=${userId}&sort=updated&order=asc&search_after=${fromDate}`;
-      return searchAnnotations(searchUrl);
     });
 
-  const openArticleInHypothesis = async (blockUid: string) => {
-    const text = getTextByBlockUid(blockUid);
-    const articleUrl = text.match(urlRegex({ strict: true }))?.[0];
-    window.open("https://via.hypothes.is/" + articleUrl, "_blank");
-  };
+    const apiAnnotationSimplify = async (results: {
+      rows: {
+        document: { title: string[] };
+        uri: string;
+        links: { incontext: string };
+        text: string;
+        tags: string[];
+        user: string;
+        group: string;
+        created: number;
+        updated: number;
+        target: { selector: { type: string; exact: string }[] }[];
+      }[];
+    }) => {
+      return results.rows.map((e) => {
+        var r = {
+          title: e.document.title[0],
+          uri: e.uri,
+          context: e.links.incontext,
+          text: e.text,
+          highlight: "",
+          tags: e.tags,
+          user: e.user,
+          group: e.group,
+          created: e.created,
+          updated: e.updated,
+        };
+        try {
+          if (e.target[0].selector) {
+            var txt = e.target[0].selector.filter(
+              (e) => e.type == "TextQuoteSelector"
+            );
+            if (txt) r.highlight = txt[0].exact;
+          }
+        } catch (e) {}
+        return r;
+      });
+    };
 
-  registerSmartBlocksCommand({
-    text: "HYPOTHESISOPENSITE",
-    handler: (context: { targetUid: string }) => () => {
-      openArticleInHypothesis(context.targetUid);
-      return "";
-    },
-  });
+    const getAnnotationsSinceDateWithTags = async (
+      fromDate: string,
+      tags: string
+    ) => {
+      return getUser().then((userId) => {
+        const searchUrl = `search?tags=${encodeURIComponent(
+          tags
+        )}&user=${userId}&sort=updated&order=asc&search_after=${fromDate}`;
+        return searchAnnotations(searchUrl);
+      });
+    };
+
+    const getAnnotationsSinceDate = async (fromDate: string) =>
+      getUser().then((userId) => {
+        const searchUrl = `search?user=${userId}&sort=updated&order=asc&search_after=${fromDate}`;
+        return searchAnnotations(searchUrl);
+      });
+
+    const openArticleInHypothesis = async (blockUid: string) => {
+      const text = getTextByBlockUid(blockUid);
+      const articleUrl = text.match(urlRegex)?.[0];
+      window.open("https://via.hypothes.is/" + articleUrl, "_blank");
+    };
+
+    window.roamAlphaAPI.ui.commandPalette.addCommand({
+      label: "Open Site from Hypothesis",
+      callback: () => {
+        openArticleInHypothesis(
+          window.roamAlphaAPI.ui.getFocusedBlock()["block-uid"]
+        );
+      },
+    });
+
+    const unregesterOpenSite = registerSmartBlocksCommand({
+      text: "HYPOTHESISOPENSITE",
+      handler: (context: { targetUid: string }) => () => {
+        openArticleInHypothesis(context.targetUid);
+        return "";
+      },
+    });
+    return () => {
+      unregesterOpenSite();
+      window.roamAlphaAPI.ui.commandPalette.removeCommand({
+        label: "Open Site from Hypothesis",
+      });
+      unregisterAnnotations();
+      window.roamAlphaAPI.ui.commandPalette.removeCommand({
+        label: "Import Public Hypothesis Annotations",
+      });
+      unregisterPrivateAnnotations();
+      window.roamAlphaAPI.ui.commandPalette.removeCommand({
+        label: "Import Private Hypothesis Annotations",
+      });
+    };
+  },
 });
