@@ -2,6 +2,9 @@ import runExtension from "roamjs-components/util/runExtension";
 import registerSmartBlocksCommand from "roamjs-components/util/registerSmartBlocksCommand";
 import getTextByBlockUid from "roamjs-components/queries/getTextByBlockUid";
 import apiGet from "roamjs-components/util/apiGet";
+import createBlock from "roamjs-components/writes/createBlock";
+import renderToast from "roamjs-components/components/Toast";
+import getChildrenLengthByParentUid from "roamjs-components/queries/getChildrenLengthByParentUid";
 
 // https://github.com/spamscanner/url-regex-safe/blob/master/src/index.js
 const protocol = `(?:https?://)`;
@@ -77,7 +80,7 @@ export default runExtension({
       return template.replace("NOTE", note.trim()).replace("URL", url).trim();
     };
 
-    const insertAnnotions = async (searchUrl: string) => {
+    const fetchAnnotationsAsRoamBlocks = async (searchUrl: string) => {
       const results = await searchAnnotations(searchUrl);
       const hTemplate =
         (args.extensionAPI.settings.get("highlights") as string) ||
@@ -122,7 +125,7 @@ export default runExtension({
             const searchUrl = `search?limit=${limit}&user=${userId}&order=asc&uri=${encodeURIComponent(
               articleUrl
             )}`;
-            return insertAnnotions(searchUrl).then((children) => [
+            return fetchAnnotationsAsRoamBlocks(searchUrl).then((children) => [
               { text: "", children },
             ]);
           });
@@ -132,18 +135,30 @@ export default runExtension({
     window.roamAlphaAPI.ui.commandPalette.addCommand({
       label: "Import Private Hypothesis Annotations",
       callback: () => {
+        const blockUid =
+          window.roamAlphaAPI.ui.getFocusedBlock()?.["block-uid"];
+        if (!blockUid)
+          renderToast({
+            content:
+              "Must fire this command while focused on a block with a URL",
+            intent: "warning",
+            id: "roamjs-public-hypothesis",
+          });
         const limit = 20; //Number(limitArg) || 20;
-        const text = getTextByBlockUid(
-          window.roamAlphaAPI.ui.getFocusedBlock()?.["block-uid"]
-        );
+        const text = getTextByBlockUid(blockUid);
         const articleUrl = text.match(urlRegex)?.[0];
         return getUser().then((userId) => {
           const searchUrl = `search?limit=${limit}&user=${userId}&order=asc&uri=${encodeURIComponent(
             articleUrl
           )}`;
-          return insertAnnotions(searchUrl).then((children) => [
-            { text: "", children },
-          ]);
+          const base = getChildrenLengthByParentUid(blockUid);
+          return fetchAnnotationsAsRoamBlocks(searchUrl).then((children) =>
+            Promise.all(
+              children.map((node, i) =>
+                createBlock({ node, parentUid: blockUid, order: base + i })
+              )
+            )
+          );
         });
       },
     });
@@ -159,23 +174,9 @@ export default runExtension({
           const searchUrl = `search?limit=${limit}&order=asc&uri=${encodeURIComponent(
             articleUrl
           )}`;
-          return searchAnnotations(searchUrl).then((annotations) => {
-            var users = [...new Set(annotations.map((e) => e.user))];
-            return [
-              {
-                text: `[${annotations[0].title}](https://via.hypothes.is/${annotations[0].uri})`,
-                children: users.map((user) => {
-                  const f = annotations.filter((e) => e.user == user);
-                  const id = f[0].user
-                    .replace("acct:", "")
-                    .replace("@hypothes.is", "");
-                  return {
-                    text: `[${id}](https://hypothes.is/users/${id})`,
-                  };
-                }),
-              },
-            ];
-          });
+          return fetchAnnotationsAsRoamBlocks(searchUrl).then((children) => [
+            { text: "", children },
+          ]);
         },
     });
 
@@ -184,29 +185,27 @@ export default runExtension({
       callback: () => {
         const blockUid =
           window.roamAlphaAPI.ui.getFocusedBlock()?.["block-uid"];
+        if (!blockUid)
+          renderToast({
+            content:
+              "Must fire this command while focused on a block with a URL",
+            intent: "warning",
+            id: "roamjs-public-hypothesis",
+          });
         const limit = 20; // Number(limitArg) || 20;
         const text = getTextByBlockUid(blockUid);
         const articleUrl = text.match(urlRegex)?.[0];
         const searchUrl = `search?limit=${limit}&order=asc&uri=${encodeURIComponent(
           articleUrl
         )}`;
-        return searchAnnotations(searchUrl).then((annotations) => {
-          var users = [...new Set(annotations.map((e) => e.user))];
-          return [
-            {
-              text: `[${annotations[0].title}](https://via.hypothes.is/${annotations[0].uri})`,
-              children: users.map((user) => {
-                const f = annotations.filter((e) => e.user == user);
-                const id = f[0].user
-                  .replace("acct:", "")
-                  .replace("@hypothes.is", "");
-                return {
-                  text: `[${id}](https://hypothes.is/users/${id})`,
-                };
-              }),
-            },
-          ];
-        });
+        const base = getChildrenLengthByParentUid(blockUid);
+        return fetchAnnotationsAsRoamBlocks(searchUrl).then((children) =>
+          Promise.all(
+            children.map((node, i) =>
+              createBlock({ node, parentUid: blockUid, order: base + i })
+            )
+          )
+        );
       },
     });
 
