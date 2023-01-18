@@ -92,7 +92,7 @@ export default runExtension({
         if (e.highlight != "")
           output += formatHighlightBasedOnTemplate(
             hTemplate,
-            e.highlight,
+            e.highlight.replace(/\n\n/g, '\n'),
             e.context
           );
         output = output.trim();
