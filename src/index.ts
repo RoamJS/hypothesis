@@ -15,8 +15,7 @@ const port = "(?::\\d{2,5})?";
 const path = "(?:[/?#][^\\s\"\\)']*)?";
 const urlRegex = `(?:${protocol}|www\\.)(?:${host}${domain}${tld})${port}${path}`;
 
-export default runExtension({
-  run: async (args) => {
+export default runExtension(async (args) => {
     args.extensionAPI.settings.panel.create({
       tabTitle: "Hypothesis",
       settings: [
@@ -303,4 +302,4 @@ export default runExtension({
       });
     };
   },
-});
+);
