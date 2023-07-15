@@ -4,15 +4,15 @@
   "description": "Integrate your Hypothesis account with Roam!",
   "main": "./build/main.js",
   "scripts": {
+    "start": "samepage dev",
     "prebuild:roam": "npm install",
-    "build:roam": "roamjs-scripts build --depot",
-    "start": "roamjs-scripts dev --depot"
+    "build:roam": "samepage build --dry"
   },
   "license": "MIT",
-  "devDependencies": {
-    "roamjs-scripts": "^0.24.0"
-  },
   "dependencies": {
-    "roamjs-components": "^0.74.11"
+    "roamjs-components": "^0.74.29"
+  },
+  "samepage": {
+    "extends": "node_modules/roamjs-components/package.json"
   }
 }
