@@ -10,7 +10,7 @@
   },
   "license": "MIT",
   "dependencies": {
-    "roamjs-components": "^0.80.1"
+    "roamjs-components": "^0.82.0"
   },
   "samepage": {
     "extends": "node_modules/roamjs-components/package.json"
