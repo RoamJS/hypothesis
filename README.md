@@ -1,6 +1,12 @@
+<a href="https://roamjs.com/">
+    <img src="https://avatars.githubusercontent.com/u/138642184" alt="RoamJS Logo" title="RoamJS" align="right" height="60" />
+</a>
+
 # Hypothesis
 
-Integrate your Hypothesis account with Roam!
+**Import Hypothes.is highlights and notes into Roam. From any block with a URL, run a command (or SmartBlocks) to pull your private or public annotations, format them into blocks, and include links, context, and tags.**
+
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/RoamJS/hypothesis)
 
 ## Usage
 
