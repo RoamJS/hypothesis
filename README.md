@@ -6,7 +6,7 @@
 
 **Import Hypothes.is highlights and notes into Roam. From any block with a URL, run a command (or SmartBlocks) to pull your private or public annotations, format them into blocks, and include links, context, and tags.**
 
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/RoamJS/hypothesis)
+[![RoamJS](https://roamjs.com/badges/website.svg)](https://roamjs.com/) [![DeepWiki](https://roamjs.com/badges/deepwiki.svg)](https://deepwiki.com/RoamJS/hypothesis) [![Slack](https://roamjs.com/badges/slack.svg)](https://roamresearch.slack.com/archives/C016N2B66JU)
 
 ## Usage
 
